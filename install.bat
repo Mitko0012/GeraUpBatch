@@ -47,7 +47,7 @@ if %java_version% lss 17 (
 )
 
 Rem Find a C compiler at 'GERA_CC', 'cc', 'gcc' or 'clang'
-set cc_path= 
+set cc_path=
 where clang >nul 2>&1
 if %errorlevel% equ 0 (
     set cc_path=clang
@@ -64,7 +64,7 @@ where GERA_CC >nul 2>&1
 if %errorlevel% equ 0 (
     set cc_path=GERA_CC
 )
-if [%cc_path%]==[] (
+if [%cc_path%] == [] (
     echo No C compiler could be found!
     echo If one is installed, try specifying its path under the 'GERA_CC' variable.
 )
@@ -87,21 +87,20 @@ if exist "%programfiles%\Gera" (
 )
 
 Rem Create 'Gera'
-echo Creating directory '%programfiles%\Gera'
-cd %programfiles%
-md Gera
-cd .\Gera
+echo Creating directory '%programfiles%\Gera'...
+md "%programfiles%\Gera"
+cd "%programfiles%\Gera"
 if %errorlevel% gtr 0 (
     echo Unable to create directory!
 )
 
 Rem Download latest release of 'https://github.com/geralang/gerac'
-echo Getting latest release of 'https://github.com/geralang/gerac'
-for /f "tokens=2" %%a in ('curl -s "https://api.github.com/repos/geralang/gerac/releases/latest"^| findstr "gerac.jar"^| findstr "browser_download_url"') do (
+echo Getting latest release of 'https://github.com/geralang/gerac'...
+for /f "tokens=2" %%a in ('curl -s --ssl-revoke-best-effort "https://api.github.com/repos/geralang/gerac/releases/latest" ^| findstr /l "browser_download_url"') do (
     set gerac_url=%%a
 )
 set gerac_url= %gerac_url:~1%
-set /a url_length=1
+set /a url_length=
 :link_loop
 set last_char=!gerac_url:~%url_length%,1!
 if "!last_char!" neq "" (
@@ -110,6 +109,41 @@ if "!last_char!" neq "" (
 )
 set /a url_length-=2
 set gerac_url=!gerac_url:~1, %url_length%!
-curl --progress-bar -L %gerac_url% -o ".\gerac.jar"
+curl --progress-bar --ssl-revoke-best-effort -L %gerac_url% -o ".\gerac.jar"
+if %errorlevel% equ 1 (
+    echo Unable to get the latest release!
+)
 
-pause
+Rem Clone 'https://github.com/geralang/gerap' and its dependencies
+echo Getting 'https://github.com/geralang/gerap' and its dependencies
+call :do_clone "https://github.com/geralang/gerap" "gerap-gh"
+call :do_clone "https://github.com/geralang/std" "std-gh"
+call :do_clone "https://github.com/geralang/ccoredeps" "ccoredeps-gh"
+call :do_clone "https://github.com/typesafeschwalbe/gera-cjson" "gera-cjson-gh"
+
+Rem Build 'gerap' from source
+echo Compiling 'gerap' from source...
+set files=
+for /R .\gerap-gh\src %%f in (*.gera, *.gem) do (
+    set files=!files! "%%f"
+)
+for /R .\std-gh\src %%f in (*.gera, *.gem) do (
+    set files=!files! "%%f"
+)
+for /R .\gera-cjson-gh\src %%f in (*.gera, *.gem) do (
+    set files=!files! "%%f"
+)
+%java_path% -jar "gerac.jar" ^
+-m "gerap::cli::main" -t "c" -o ".\gerap-gh\gerap.c" ^
+%files%
+if %errorlevel% neq 0 (
+    echo Unable to compile 'gerap'!
+)
+exit /b 0
+
+:do_clone
+%git_path% clone %~1 %~2
+if %errorlevel% equ 1 (
+    echo Unable to clone %~1!
+)
+exit /b 0
