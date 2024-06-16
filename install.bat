@@ -101,7 +101,6 @@ md "%programfiles%\Gera"
 cd "%programfiles%\Gera"
 if %errorlevel% gtr 0 (
     echo %c_red%Unable to create directory!%c_reset%
-    echo
     echo Note: Did you run as administrator?
     goto :abort
 )
